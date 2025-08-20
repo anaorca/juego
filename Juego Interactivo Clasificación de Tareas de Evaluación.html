@@ -1,0 +1,272 @@
+!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego: Clasificación de Tareas de Evaluación</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .task-card {
+            transition: all 0.2s ease-in-out;
+            cursor: grab;
+        }
+        .task-card:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .dragging {
+            opacity: 0.5;
+        }
+        .category-column {
+            transition: background-color 0.2s ease;
+        }
+        .drag-over {
+            background-color: #e0f2f1; /* Light teal */
+        }
+        .correct-card {
+            background-color: #d1fae5; /* Light green */
+            border-color: #10b981; /* Green */
+            cursor: not-allowed;
+        }
+        .incorrect-flash {
+            animation: flash-red 0.5s;
+        }
+        @keyframes flash-red {
+            0% { border-color: #ef4444; } /* Red */
+            100% { border-color: #e5e7eb; } /* Gray */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-800">Actividad Interactiva: Clasificación de Tareas</h1>
+            <p class="text-md md:text-lg text-gray-600 mt-2">Arrastra cada descripción de evaluación a su categoría correcta.</p>
+        </header>
+
+        <!-- Score and Controls -->
+        <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow-md mb-8">
+            <div class="text-xl font-bold">
+                Puntaje: <span id="score" class="text-teal-600">0</span> / 10
+            </div>
+            <button id="reset-button" class="bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors">
+                Reiniciar
+            </button>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Tasks to be classified -->
+            <div class="w-full lg:w-1/3 bg-white p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4 text-center">Tareas a Clasificar</h2>
+                <div id="tasks-container" class="space-y-3 min-h-[200px]">
+                    <!-- Task cards will be injected here by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Category Columns -->
+            <div class="w-full lg:w-2/3">
+                <div id="categories-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Category columns will be injected here by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for final message -->
+    <div id="modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-2xl text-center max-w-sm">
+            <h2 id="modal-title" class="text-2xl font-bold text-teal-800 mb-4">¡Excelente Trabajo!</h2>
+            <p id="modal-message" class="text-gray-700 mb-6">Has clasificado todas las tareas correctamente.</p>
+            <button id="modal-close" class="bg-teal-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-teal-700 transition-colors">
+                Jugar de Nuevo
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DATA ---
+            const tasksData = [
+                { id: 'task1', text: 'Estudiantes de enfermería realizan una RCP en un maniquí de alta tecnología mientras son observados.', category: 'Tarea de Desempeño' },
+                { id: 'task2', text: 'Un estudiante de escritura creativa compila sus tres mejores cuentos cortos, junto con una reflexión sobre su evolución como escritor.', category: 'Portafolio' },
+                { id: 'task3', text: 'Estudiantes de derecho participan en un juicio simulado, asumiendo los roles de fiscalía y defensa en un caso hipotético.', category: 'Simulación/Juego de Rol' },
+                { id: 'task4', text: 'Un grupo de estudiantes de urbanismo investiga durante un semestre un problema de tráfico en su ciudad y presenta una propuesta de rediseño vial al ayuntamiento.', category: 'Proyecto/ABP' },
+                { id: 'task5', text: 'Estudiantes de posgrado defienden oralmente su tesis ante un jurado de profesores.', category: 'Exhibición/Defensa' },
+                { id: 'task6', text: 'Un estudiante de música interpreta una sonata de Mozart en un recital de fin de semestre.', category: 'Tarea de Desempeño' },
+                { id: 'task7', text: 'Estudiantes de marketing gestionan una cartera de inversiones ficticia durante un mes, reaccionando a las noticias del mercado en tiempo real.', category: 'Simulación/Juego de Rol' },
+                { id: 'task8', text: 'Un estudiante de historia del arte cura una colección de sus análisis de obras a lo largo del curso, demostrando su capacidad para aplicar diferentes marcos teóricos.', category: 'Portafolio' },
+                { id: 'task9', text: 'Estudiantes de ingeniería presentan su prototipo de robot en una feria de innovación, demostrando su funcionamiento y respondiendo preguntas de expertos de la industria.', category: 'Exhibición/Defensa' },
+                { id: 'task10', text: 'Un equipo de estudiantes de biología pasa un mes investigando la calidad del agua de un lago cercano, culminando en un informe científico y una presentación a la comunidad.', category: 'Proyecto/ABP' }
+            ];
+
+            const categoriesData = [
+                { name: 'Tarea de Desempeño', color: 'bg-blue-100' },
+                { name: 'Portafolio', color: 'bg-purple-100' },
+                { name: 'Proyecto/ABP', color: 'bg-yellow-100' },
+                { name: 'Simulación/Juego de Rol', color: 'bg-red-100' },
+                { name: 'Exhibición/Defensa', color: 'bg-green-100' },
+            ];
+
+            // --- DOM ELEMENTS ---
+            const tasksContainer = document.getElementById('tasks-container');
+            const categoriesContainer = document.getElementById('categories-container');
+            const scoreElement = document.getElementById('score');
+            const resetButton = document.getElementById('reset-button');
+            const modal = document.getElementById('modal');
+            const modalCloseButton = document.getElementById('modal-close');
+
+            let score = 0;
+
+            // --- FUNCTIONS ---
+
+            // Function to shuffle an array
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // Initialize or reset the game
+            function initializeGame() {
+                // Reset score
+                score = 0;
+                updateScore();
+                
+                // Clear containers
+                tasksContainer.innerHTML = '';
+                categoriesContainer.innerHTML = '';
+
+                // Create and display category columns
+                categoriesData.forEach(cat => {
+                    const categoryCol = document.createElement('div');
+                    categoryCol.className = `category-column p-4 rounded-lg shadow-inner ${cat.color}`;
+                    categoryCol.dataset.category = cat.name;
+
+                    const categoryTitle = document.createElement('h3');
+                    categoryTitle.className = 'font-bold text-lg mb-3 text-center';
+                    categoryTitle.textContent = cat.name;
+                    categoryCol.appendChild(categoryTitle);
+
+                    const dropZone = document.createElement('div');
+                    dropZone.className = 'drop-zone min-h-[100px] space-y-2';
+                    categoryCol.appendChild(dropZone);
+
+                    categoriesContainer.appendChild(categoryCol);
+                });
+
+                // Shuffle and display task cards
+                const shuffledTasks = shuffle([...tasksData]);
+                shuffledTasks.forEach(task => {
+                    const taskCard = document.createElement('div');
+                    taskCard.id = task.id;
+                    taskCard.className = 'task-card bg-white p-3 rounded-md border border-gray-200 shadow-sm';
+                    taskCard.draggable = true;
+                    taskCard.textContent = task.text;
+                    tasksContainer.appendChild(taskCard);
+                });
+
+                addEventListeners();
+                modal.classList.add('hidden');
+            }
+
+            // Update score display
+            function updateScore() {
+                scoreElement.textContent = score;
+            }
+
+            // Show completion modal
+            function showCompletionModal() {
+                modal.classList.remove('hidden');
+            }
+
+            // Add all necessary event listeners
+            function addEventListeners() {
+                const taskCards = document.querySelectorAll('.task-card');
+                const dropZones = document.querySelectorAll('.category-column');
+
+                taskCards.forEach(card => {
+                    card.addEventListener('dragstart', handleDragStart);
+                    card.addEventListener('dragend', handleDragEnd);
+                });
+
+                dropZones.forEach(zone => {
+                    zone.addEventListener('dragover', handleDragOver);
+                    zone.addEventListener('dragleave', handleDragLeave);
+                    zone.addEventListener('drop', handleDrop);
+                });
+            }
+
+            // --- EVENT HANDLERS ---
+
+            function handleDragStart(e) {
+                e.dataTransfer.setData('text/plain', e.target.id);
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+            }
+
+            function handleDragEnd(e) {
+                e.target.classList.remove('dragging');
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                e.currentTarget.classList.add('drag-over');
+            }
+
+            function handleDragLeave(e) {
+                e.currentTarget.classList.remove('drag-over');
+            }
+
+            function handleDrop(e) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+
+                const taskId = e.dataTransfer.getData('text/plain');
+                const draggedCard = document.getElementById(taskId);
+                const targetCategory = e.currentTarget.dataset.category;
+                const taskData = tasksData.find(t => t.id === taskId);
+
+                // Check if the drop is correct
+                if (taskData.category === targetCategory) {
+                    const dropZone = e.currentTarget.querySelector('.drop-zone');
+                    dropZone.appendChild(draggedCard);
+                    
+                    // Style as correct and disable further dragging
+                    draggedCard.classList.add('correct-card');
+                    draggedCard.draggable = false;
+                    
+                    score++;
+                    updateScore();
+
+                    // Check for game completion
+                    if (score === tasksData.length) {
+                        showCompletionModal();
+                    }
+                } else {
+                    // Flash red to indicate incorrect placement
+                    draggedCard.classList.add('incorrect-flash');
+                    setTimeout(() => {
+                        draggedCard.classList.remove('incorrect-flash');
+                    }, 500);
+                }
+            }
+
+            // --- INITIALIZATION ---
+            initializeGame();
+
+            // Reset button functionality
+            resetButton.addEventListener('click', initializeGame);
+            modalCloseButton.addEventListener('click', initializeGame);
+        });
+    </script>
+</body>
+</html>
